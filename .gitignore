@@ -1,0 +1,8 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.streamlit/secrets.toml
+data_samples/demo.sqlite3
+data_samples/*.sqlite3
