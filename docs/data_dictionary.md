@@ -25,7 +25,7 @@
 | fuel_type | 연료 유형 | 가솔린 |
 | segment | 차급 | 준중형 |
 | units | 판매/등록 대수 | 1234 |
-| avg_fuel_efficiency | 평균 연비 | 14.8 |
+| Korean_official_fuel_efficiency | 공인 연비 | 14.8 |
 
 ## transit_usage_monthly
 
