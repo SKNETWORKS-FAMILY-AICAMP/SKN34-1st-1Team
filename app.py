@@ -32,7 +32,7 @@ def safe_load(table_name: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def show_gas_stations(stations: pd.DataFrame, empty_message: str) -> None:
+def show_gas_stations(stations: pd.DataFrame, empty_message: str, map_key: str = "gas_stations_map") -> None:
     if stations.empty:
         st.info(empty_message)
         return
@@ -40,7 +40,7 @@ def show_gas_stations(stations: pd.DataFrame, empty_message: str) -> None:
     with col1:
         folium_map = build_gas_stations_map(stations)
         if folium_map is not None:
-            st_folium(folium_map, width=None, height=600, returned_objects=[])
+            st_folium(folium_map, width=None, height=600, returned_objects=[], key=map_key)
         else:
             st.caption("지도에 표시할 좌표가 없습니다.")
     with col2:
@@ -113,9 +113,8 @@ with tab2:
     
     cnt = 20 # 주유소 조회 개수
 
-    product_options = {"휘발유": "B027", "경유": "D047", "고급휘발유": "B034"}
-    selected_product = st.selectbox("유종", list(product_options.keys()))
-    product_code = product_options[selected_product]
+    selected_product = product
+    product_code = PRODUCT_CODES[product]
 
     avg_prices = pd.DataFrame()
     if key:
@@ -146,24 +145,26 @@ with tab2:
 
 
     if key:
-        area_code = st.text_input("지역 코드", placeholder="예: 서울 01, 경기 02 등 Opinet 코드")
+        if "opinet_station_results" not in st.session_state:
+            st.session_state["opinet_station_results"] = pd.DataFrame()
+
         if st.button("저렴한 주유소 조회"):
             try:
-
-                stations = fetch_opinet_low_top10(key, product_code=PRODUCT_CODES[product], area_code=AREA_CODES[area])
-                show_gas_stations(stations, "조회된 주유소가 없습니다.")
-                stations = fetch_opinet_low_top10(key, product_code=product_code, area_code=area_code)
-                if stations.empty:
-                    st.info("조회된 주유소가 없습니다.")
-                else:
+                stations = fetch_opinet_low_top10(key, product_code=product_code, area_code=AREA_CODES[area])
+                if not stations.empty:
                     selected_avg = avg_prices[avg_prices["product_code"] == product_code] if not avg_prices.empty else pd.DataFrame()
                     if not selected_avg.empty and "gasoline_price" in stations.columns:
                         avg_price = selected_avg["avg_price"].iloc[0]
                         stations["national_avg_gap"] = stations["gasoline_price"] - avg_price
-                    st.dataframe(stations, use_container_width=True, hide_index=True)
-
+                st.session_state["opinet_station_results"] = stations
             except Exception as exc:
                 st.error(f"주유소 조회에 실패했습니다: {exc}")
+
+        stations = st.session_state.get("opinet_station_results", pd.DataFrame())
+        if stations.empty:
+            st.info("조회된 주유소가 없습니다.")
+        else:
+            show_gas_stations(stations, "조회된 주유소가 없습니다.", map_key="opinet_gas_stations_map")
     else:
         stations = safe_load("gas_stations")
         if stations.empty:

@@ -1,5 +1,6 @@
 import folium
 import pandas as pd
+from typing import Optional
 
 _KATEC_TO_WGS84 = (
     "+proj=tmerc +lat_0=38 +lon_0=128 +k=0.9999 +x_0=400000 +y_0=600000 "
@@ -115,7 +116,7 @@ def _rank_color(rank: int, total: int) -> str:
 def build_gas_stations_map(
     stations: pd.DataFrame,
     price_column: str = "gasoline_price",
-) -> folium.Map | None:
+) -> Optional[folium.Map]:
     mapped = prepare_stations_for_map(stations)
     if mapped.empty:
         return None
