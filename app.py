@@ -2,9 +2,11 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 from sqlalchemy.exc import SQLAlchemyError
+from streamlit_folium import st_folium
 
 from app.analytics import oil_car_dataset, oil_transit_dataset
 from app.db import get_engine, read_sql
+from app.map import build_gas_stations_map
 from app.sources import fetch_opinet_low_top10, opinet_api_key, search_community_posts
 
 
@@ -28,6 +30,21 @@ def safe_load(table_name: str) -> pd.DataFrame:
         st.error("MySQL 연결 또는 테이블 초기화가 필요합니다. README의 설정 순서를 확인하세요.")
         st.caption(str(exc))
         return pd.DataFrame()
+
+
+def show_gas_stations(stations: pd.DataFrame, empty_message: str) -> None:
+    if stations.empty:
+        st.info(empty_message)
+        return
+    col1, col2 = st.columns(2)
+    with col1:
+        folium_map = build_gas_stations_map(stations)
+        if folium_map is not None:
+            st_folium(folium_map, width=None, height=600, returned_objects=[])
+        else:
+            st.caption("지도에 표시할 좌표가 없습니다.")
+    with col2:
+        st.dataframe(stations, use_container_width=True, hide_index=True)
 
 
 st.title("유가 기반 자동차 구매, 주유소, 대중교통, 커뮤니티 분석")
@@ -66,17 +83,39 @@ with tab1:
 with tab2:
     st.subheader("유가가 제일 저렴한 주유소 찾기")
     key = opinet_api_key()
-    product = st.selectbox("유종", {"휘발유": "B027", "경유": "D047", "고급휘발유": "B034"})
-    area_code = st.text_input("지역 코드", placeholder="예: 서울 01, 경기 02 등 Opinet 코드")
-
+    PRODUCT_CODES = {"휘발유": "B027", "경유": "D047", "고급휘발유": "B034"}  # 유종 Opinet 코드
+    AREA_CODES = {
+        "전체": "",
+        "서울특별시": "01",
+        "경기도": "02",
+        "강원특별자치도": "03",
+        "충청북도": "04",
+        "충청남도": "05",
+        "전북특별자치도": "06",
+        "전라남도": "07",
+        "경상북도": "08",
+        "경상남도": "09",
+        "부산광역시": "10",
+        "제주특별자치도": "11",
+        "대구광역시": "14",
+        "인천광역시": "15",
+        "광주광역시": "16",
+        "대전광역시": "17",
+        "울산광역시": "18",
+        "세종특별자치시": "19",
+    }  # Opinet 지역 코드
+    cola,colb= st.columns(2)
+    with cola:
+        product = st.selectbox("유종", PRODUCT_CODES.keys())
+    with colb:
+        area = st.selectbox("지역", AREA_CODES.keys())
+    
+    cnt = 20 # 주유소 조회 개수
     if key:
         if st.button("저렴한 주유소 조회"):
             try:
-                stations = fetch_opinet_low_top10(key, product_code=product, area_code=area_code)
-                if stations.empty:
-                    st.info("조회된 주유소가 없습니다.")
-                else:
-                    st.dataframe(stations, use_container_width=True, hide_index=True)
+                stations = fetch_opinet_low_top10(key, product_code=PRODUCT_CODES[product], area_code=AREA_CODES[area])
+                show_gas_stations(stations, "조회된 주유소가 없습니다.")
             except Exception as exc:
                 st.error(f"주유소 조회에 실패했습니다: {exc}")
     else:
@@ -95,7 +134,7 @@ with tab2:
                 )
                 filtered = filtered[mask]
             filtered = filtered.sort_values("gasoline_price", na_position="last").head(30)
-            st.dataframe(filtered, use_container_width=True, hide_index=True)
+            show_gas_stations(filtered, "표시할 주유소가 없습니다.")
 
 with tab3:
     st.subheader("유가 상승에 따른 대중교통 사용 빈도")

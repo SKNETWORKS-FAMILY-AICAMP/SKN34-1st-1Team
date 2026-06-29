@@ -9,17 +9,23 @@ from bs4 import BeautifulSoup
 OPINET_BASE_URL = "https://www.opinet.co.kr/api"
 
 
-def fetch_opinet_low_top10(api_key: str, product_code: str = "B027", area_code: str = "") -> pd.DataFrame:
+def fetch_opinet_low_top10(api_key: str, product_code: str="B027", area_code: str = "") -> pd.DataFrame:
     """Fetch low-price gas stations from Opinet when an API key is available."""
+    type =  {"B027": "휘발유",
+             "D047": "경유",
+             "B034": "고급휘발유"}
     params = {
         "code": api_key,
         "out": "json",
         "prodcd": product_code,
+        "cnt": 20,
     }
     if area_code:
         params["area"] = area_code
 
+    # response = requests.get(f"https://www.opinet.co.kr/api/lowTop10.do?out=json&code=F260626947&prodcd=B027&area=0101&cnt=20", timeout=15)
     response = requests.get(f"{OPINET_BASE_URL}/lowTop10.do", params=params, timeout=15)
+    # print(response.text)
     response.raise_for_status()
     payload = response.json()
     rows = payload.get("RESULT", {}).get("OIL", [])
@@ -31,10 +37,13 @@ def fetch_opinet_low_top10(api_key: str, product_code: str = "B027", area_code: 
         normalized.append(
             {
                 "station_code": row.get("UNI_ID"),
+                "oil_type": type[product_code],
                 "station_name": row.get("OS_NM"),
                 "brand": row.get("POLL_DIV_CD"),
                 "address": row.get("NEW_ADR") or row.get("VAN_ADR"),
                 "gasoline_price": pd.to_numeric(row.get("PRICE"), errors="coerce"),
+                "gis_x_coor": pd.to_numeric(row.get("GIS_X_COOR"), errors="coerce"),
+                "gis_y_coor": pd.to_numeric(row.get("GIS_Y_COOR"), errors="coerce"),
                 "updated_at": datetime.now(),
             }
         )
