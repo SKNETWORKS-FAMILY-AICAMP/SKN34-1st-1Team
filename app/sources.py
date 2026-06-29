@@ -1,12 +1,20 @@
 import os
+import xml.etree.ElementTree as ET
 from datetime import datetime
 
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 
+
+load_dotenv()
 
 OPINET_BASE_URL = "https://www.opinet.co.kr/api"
+OPINET_HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "application/xml,text/xml,application/json,*/*",
+}
 
 
 def fetch_opinet_low_top10(api_key: str, product_code: str = "B027", area_code: str = "") -> pd.DataFrame:
@@ -19,7 +27,7 @@ def fetch_opinet_low_top10(api_key: str, product_code: str = "B027", area_code: 
     if area_code:
         params["area"] = area_code
 
-    response = requests.get(f"{OPINET_BASE_URL}/lowTop10.do", params=params, timeout=15)
+    response = requests.get(f"{OPINET_BASE_URL}/lowTop10.do", params=params, headers=OPINET_HEADERS, timeout=15)
     response.raise_for_status()
     payload = response.json()
     rows = payload.get("RESULT", {}).get("OIL", [])
@@ -39,6 +47,30 @@ def fetch_opinet_low_top10(api_key: str, product_code: str = "B027", area_code: 
             }
         )
     return pd.DataFrame(normalized)
+
+
+def fetch_opinet_avg_all_price(api_key: str) -> pd.DataFrame:
+    """Fetch current national average oil prices from Opinet."""
+    params = {
+        "code": api_key,
+        "out": "xml",
+    }
+    response = requests.get(f"{OPINET_BASE_URL}/avgAllPrice.do", params=params, headers=OPINET_HEADERS, timeout=15)
+    response.raise_for_status()
+    root = ET.fromstring(response.content)
+
+    rows = []
+    for oil in root.findall(".//OIL"):
+        rows.append(
+            {
+                "trade_date": pd.to_datetime(oil.findtext("TRADE_DT"), format="%Y%m%d", errors="coerce"),
+                "product_code": oil.findtext("PRODCD"),
+                "product_name": oil.findtext("PRODNM"),
+                "avg_price": pd.to_numeric(oil.findtext("PRICE"), errors="coerce"),
+                "diff": pd.to_numeric(oil.findtext("DIFF"), errors="coerce"),
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 def search_community_posts(keyword: str, limit: int = 20) -> pd.DataFrame:

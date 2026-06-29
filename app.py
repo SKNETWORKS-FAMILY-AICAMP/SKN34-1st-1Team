@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.analytics import oil_car_dataset, oil_transit_dataset
 from app.db import get_engine, read_sql
-from app.sources import fetch_opinet_low_top10, opinet_api_key, search_community_posts
+from app.sources import fetch_opinet_avg_all_price, fetch_opinet_low_top10, opinet_api_key, search_community_posts
 
 
 st.set_page_config(page_title="유가 기반 자동차/교통 분석", layout="wide")
@@ -66,16 +66,49 @@ with tab1:
 with tab2:
     st.subheader("유가가 제일 저렴한 주유소 찾기")
     key = opinet_api_key()
-    product = st.selectbox("유종", {"휘발유": "B027", "경유": "D047", "고급휘발유": "B034"})
-    area_code = st.text_input("지역 코드", placeholder="예: 서울 01, 경기 02 등 Opinet 코드")
+    product_options = {"휘발유": "B027", "경유": "D047", "고급휘발유": "B034"}
+    selected_product = st.selectbox("유종", list(product_options.keys()))
+    product_code = product_options[selected_product]
+
+    avg_prices = pd.DataFrame()
+    if key:
+        try:
+            avg_prices = fetch_opinet_avg_all_price(key)
+        except Exception as exc:
+            st.warning(f"전국 평균 유가 조회에 실패했습니다: {exc}")
+
+    if key and avg_prices.empty:
+        st.info("전국 평균 유가 데이터가 조회되지 않았습니다. Opinet 응답 또는 API 권한을 확인하세요.")
+
+    if not avg_prices.empty:
+        trade_date = avg_prices["trade_date"].dropna().max()
+        if pd.notna(trade_date):
+            st.caption(f"전국 평균 유가 기준일: {trade_date:%Y-%m-%d}")
+
+        metric_cols = st.columns(min(len(avg_prices), 5))
+        for col, (_, row) in zip(metric_cols, avg_prices.iterrows()):
+            diff_value = row["diff"]
+            avg_price_value = row["avg_price"]
+            delta = None if pd.isna(diff_value) else f"{diff_value:+.2f}원"
+            col.metric(row["product_name"], f"{avg_price_value:,.2f}원", delta=delta)
+
+        selected_avg = avg_prices[avg_prices["product_code"] == product_code]
+        if not selected_avg.empty:
+            selected_avg_price = selected_avg["avg_price"].iloc[0]
+            st.caption(f"선택 유종 전국 평균: {selected_avg_price:,.2f}원")
 
     if key:
+        area_code = st.text_input("지역 코드", placeholder="예: 서울 01, 경기 02 등 Opinet 코드")
         if st.button("저렴한 주유소 조회"):
             try:
-                stations = fetch_opinet_low_top10(key, product_code=product, area_code=area_code)
+                stations = fetch_opinet_low_top10(key, product_code=product_code, area_code=area_code)
                 if stations.empty:
                     st.info("조회된 주유소가 없습니다.")
                 else:
+                    selected_avg = avg_prices[avg_prices["product_code"] == product_code] if not avg_prices.empty else pd.DataFrame()
+                    if not selected_avg.empty and "gasoline_price" in stations.columns:
+                        avg_price = selected_avg["avg_price"].iloc[0]
+                        stations["national_avg_gap"] = stations["gasoline_price"] - avg_price
                     st.dataframe(stations, use_container_width=True, hide_index=True)
             except Exception as exc:
                 st.error(f"주유소 조회에 실패했습니다: {exc}")
