@@ -35,6 +35,8 @@ TABLE_COLUMNS = {
         "updated_at",
     ],
     "community_posts": ["source", "title", "url", "snippet", "keyword", "published_at", "crawled_at"],
+    "transit_usage": ["month", "used"],
+    "gas_sales": ["month", "normal_gasoline", "diesel"],
 }
 
 DATE_COLUMNS = {
@@ -43,6 +45,8 @@ DATE_COLUMNS = {
     "transit_usage_monthly": ["month"],
     "gas_stations": ["updated_at"],
     "community_posts": ["published_at", "crawled_at"],
+    "transit_usage": ["month"],
+    "gas_sales": ["month"],
 }
 
 NUMERIC_COLUMNS = {
@@ -50,6 +54,8 @@ NUMERIC_COLUMNS = {
     "car_sales_monthly": ["units", "avg_fuel_efficiency"],
     "transit_usage_monthly": ["rides"],
     "gas_stations": ["latitude", "longitude", "gasoline_price", "diesel_price"],
+    "transit_usage": ["used"],
+    "gas_sales": ["normal_gasoline", "diesel"],
 }
 
 
