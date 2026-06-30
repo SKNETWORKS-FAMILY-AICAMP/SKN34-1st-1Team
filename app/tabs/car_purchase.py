@@ -1,12 +1,70 @@
 import pandas as pd
-import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
+from plotly.subplots import make_subplots
 
-from app.analytics import oil_car_dataset
+from app.analytics import gas_sales_table, prepare_gas_sales, prepare_transit_usage
 from app.services import load_total_use_json, safe_load
+GAS_TABLE_COLUMNS = {
+    "month": "년/월",
+    "normal_gasoline": "휘발유(원)",
+    "diesel": "경유(원)",
+}
+
+PRODUCT_COLORS = {
+    "휘발유": "#F4C430",
+    "경유": "#2E8B57",
+}
+
+def _format_gas_table(df: pd.DataFrame) -> pd.DataFrame:
+    display = df.sort_values("month", ascending=False).copy()
+    display["month"] = display["month"].dt.strftime("%Y-%m")
+    display["normal_gasoline"] = display["normal_gasoline"].map(lambda v: f"{v:,.2f}")
+    display["diesel"] = display["diesel"].map(lambda v: f"{v:,.2f}")
+    return display.rename(columns=GAS_TABLE_COLUMNS)
 
 
-def _format_rate_markdown(rate) -> str:
+def _build_gas_transit_chart(gas_long: pd.DataFrame, transit_data: pd.DataFrame) -> go.Figure:
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    for product in gas_long["product"].dropna().unique():
+        subset = gas_long[gas_long["product"] == product]
+        color = PRODUCT_COLORS.get(product)
+        fig.add_trace(
+            go.Scatter(
+                x=subset["month"],
+                y=subset["avg_price"],
+                name=product,
+                mode="lines+markers",
+                line=dict(color=color),
+                marker=dict(color=color),
+            ),
+            secondary_y=False,
+        )
+
+    if not transit_data.empty:
+        fig.add_trace(
+            go.Bar(
+                x=transit_data["month"],
+                y=transit_data["used"],
+                name="교통카드 이용",
+                opacity=0.35,
+                marker_color="rgba(100, 149, 237, 0.6)",
+            ),
+            secondary_y=True,
+        )
+
+    fig.update_layout(
+        title="월별 유가 및 교통카드 이용",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    fig.update_xaxes(title_text="월")
+    fig.update_yaxes(title_text="가격(원)", secondary_y=False)
+    fig.update_yaxes(title_text="이용(건)", secondary_y=True)
+    return fig
+
+
+def _format_rate_markdown(rate) -> str:    
     if rate is None or pd.isna(rate):
         return "-"
     text = f"{rate:.2f}"
@@ -42,34 +100,39 @@ def _render_total_use_panel(data: dict) -> None:
 
 def render() -> None:
     st.subheader("유가 상승에 따른 자동차 구매 변화")
-    oil_df = safe_load("oil_prices_monthly")
-    car_df = safe_load("car_sales_monthly")
-    data = oil_car_dataset(oil_df, car_df)
 
-    if data.empty:
-        st.info("유가와 자동차 판매/등록 데이터를 먼저 적재하세요.")
+    gas_df = safe_load("gas_sales")
+    transit_df = safe_load("transit_usage")
+
+    gas_long = prepare_gas_sales(gas_df)
+    gas_table = gas_sales_table(gas_df)
+    transit_data = prepare_transit_usage(transit_df)
+    if gas_long.empty:
+        st.info("유가 데이터를 먼저 적재하세요.")
+        st.caption("python scripts/load_csv_to_db.py data/processed/gas_sales.csv gas_sales")
+        col1, col2 = st.columns([4, 3])
+        with col2:
+            total_use = load_total_use_json()
+            if total_use:
+                container = st.container(border=True)
+                with container:
+                    _render_total_use_panel(total_use)
+            else:
+                st.info("교통카드 이용 데이터가 없습니다.")
         return
 
-    fuel_types = sorted(data["fuel_type"].dropna().unique())
-    selected = st.multiselect("연료 유형", fuel_types, default=fuel_types)
-    filtered = data[data["fuel_type"].isin(selected)]
+    products = sorted(gas_long["product"].dropna().unique())
+    gas_filtered = gas_long[gas_long["product"].isin(products)]
 
-    left, right = st.columns(2)
-    with left:
-        st.plotly_chart(
-            px.line(filtered, x="month", y="units", color="fuel_type", markers=True, title="월별 자동차 구매/등록 대수"),
-            use_container_width=True,
-        )
-    with right:
-        st.plotly_chart(
-            px.line(filtered, x="month", y="avg_price", color="fuel_type", markers=True, title="월평균 유가"),
-            use_container_width=True,
-        )
-    col1, col2 = st.columns([4,3])
-    with col1: # 자동차 구매/등록 대수 테이블
-        st.dataframe(filtered, use_container_width=True, hide_index=True)
-    
-    with col2: # 교통카드 이용 현황
+    st.plotly_chart(
+        _build_gas_transit_chart(gas_filtered, transit_data),
+        use_container_width=True,
+    )
+    col1, col2 = st.columns([4, 3])
+    with col1:
+        st.dataframe(_format_gas_table(gas_table), use_container_width=True, hide_index=True)
+
+    with col2:
         total_use = load_total_use_json()
         if total_use:
             container = st.container(border=True)
