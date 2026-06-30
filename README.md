@@ -65,6 +65,16 @@ MySQL DB와 테이블을 생성합니다.
 ```bash
 mysql -u root -p < sql/schema.sql
 ```
+---추가--- 크롤링 데이터 json파일생성
+```bash
+python app/crawling_total_used.py
+```
+
+---추가--- csv데이터 적재
+```bash
+python scripts/load_csv_to_db.py data/processed/transit_usage.csv transit_usage --if-exists replace
+python scripts/load_csv_to_db.py data/processed/gas_sales.csv gas_sales --if-exists replace
+```
 
 샘플 데이터를 넣고 실행합니다.
 
