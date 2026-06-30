@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 from sqlalchemy.exc import SQLAlchemyError
@@ -5,6 +8,9 @@ from streamlit_folium import st_folium
 
 from app.db import get_engine, read_sql
 from app.map import build_gas_stations_map
+
+ROOT = Path(__file__).resolve().parents[1]
+TOTAL_USE_JSON = ROOT / "data" / "processed" / "total_use_text.json"
 
 
 @st.cache_data(ttl=60)
@@ -24,6 +30,13 @@ def safe_load(table_name: str) -> pd.DataFrame:
         st.error("MySQL 연결 또는 테이블 초기화가 필요합니다. README의 설정 순서를 확인하세요.")
         st.caption(str(exc))
         return pd.DataFrame()
+
+
+@st.cache_data(ttl=60)
+def load_total_use_json() -> dict | None:
+    if not TOTAL_USE_JSON.exists():
+        return None
+    return json.loads(TOTAL_USE_JSON.read_text(encoding="utf-8"))
 
 
 def show_gas_stations(stations: pd.DataFrame, empty_message: str, map_key: str = "gas_stations_map") -> None:

@@ -1,8 +1,43 @@
+import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 from app.analytics import oil_car_dataset
-from app.services import safe_load
+from app.services import load_total_use_json, safe_load
+
+
+def _format_rate_markdown(rate) -> str:
+    if rate is None or pd.isna(rate):
+        return "-"
+    text = f"{rate:.2f}"
+    if rate > 0:
+        return f":red[:material/trending_up: {text}%]"
+    if rate < 0:
+        return f":blue[:material/trending_down: {text}%]"
+    return text
+
+
+def _render_total_use_panel(data: dict) -> None:
+    st.markdown("**교통카드 이용 현황**")
+    if data.get("date"):
+        st.caption(data["date"])
+
+    metric_left, metric_right = st.columns(2)
+    pass_count = data.get("pass_count")
+    member_count = data.get("member_count")
+    metric_left.metric("통행", f"{pass_count:,}건" if pass_count is not None else "-")
+    metric_right.metric("이용수", f"{member_count:,}명" if member_count is not None else "-")
+
+    compare = data.get("compare") or {}
+    if compare:
+        
+        for label, item in compare.items():
+            rate = item.get("rate")
+            value = item.get("value")
+            cols = st.columns([1.2, 1.2, 1,1.5]) #여백 1.5 추가
+            cols[0].write(label)
+            cols[1].markdown(f"{value:,}명" if value is not None else "-")
+            cols[2].markdown(_format_rate_markdown(rate))
 
 
 def render() -> None:
@@ -30,5 +65,17 @@ def render() -> None:
             px.line(filtered, x="month", y="avg_price", color="fuel_type", markers=True, title="월평균 유가"),
             use_container_width=True,
         )
+    col1, col2 = st.columns([4,3])
+    with col1: # 자동차 구매/등록 대수 테이블
+        st.dataframe(filtered, use_container_width=True, hide_index=True)
+    
+    with col2: # 교통카드 이용 현황
+        total_use = load_total_use_json()
+        if total_use:
+            container = st.container(border=True)
+            with container:
+                _render_total_use_panel(total_use)
+        else:
+            st.info("교통카드 이용 데이터가 없습니다.")
 
-    st.dataframe(filtered, use_container_width=True, hide_index=True)
+    
