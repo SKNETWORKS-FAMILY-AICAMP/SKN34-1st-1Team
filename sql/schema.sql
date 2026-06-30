@@ -62,3 +62,18 @@ CREATE TABLE IF NOT EXISTS community_posts (
   crawled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_post_url (url)
 );
+
+CREATE TABLE IF NOT EXISTS transit_usage (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  month DATE NOT NULL,
+  used BIGINT NOT NULL,
+  UNIQUE KEY uq_transit_usage_month (month)
+);
+
+CREATE TABLE IF NOT EXISTS gas_sales (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  month DATE NOT NULL,
+  normal_gasoline DECIMAL(10, 2) NOT NULL,
+  diesel DECIMAL(10, 2) NOT NULL,
+  UNIQUE KEY uq_gas_sales_month (month)
+);
