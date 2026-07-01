@@ -5,7 +5,7 @@ from plotly.subplots import make_subplots
 
 from app.analytics import gas_sales_table, prepare_gas_sales, prepare_transit_usage
 from app.services import load_total_use_json, safe_load
-#
+
 GAS_TABLE_COLUMNS = {
     "month": "년/월",
     "normal_gasoline": "휘발유(원)",
