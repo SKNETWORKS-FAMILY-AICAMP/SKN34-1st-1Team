@@ -1,11 +1,10 @@
 # 유가 기반 자동차/교통 분석 Streamlit 앱
 
-Streamlit + MySQL로 아래 4가지 기능을 구현한 VSCode용 프로젝트입니다.
+Streamlit + MySQL로 아래 3가지 기능을 구현한 VSCode용 프로젝트입니다.
 
 1. 유가 상승에 따른 자동차 구매/등록 변화 통계
 2. 유가가 제일 저렴한 주유소 검색
-3. 유가 상승에 따른 대중교통 이용 빈도 분석
-4. 기름값을 아낄 수 있는 자동차 관련 커뮤니티 검색 결과 수집
+3. 기름값을 아낄 수 있는 자동차 관련 커뮤니티 검색 결과 수집
 
 ## 실행 방식
 
@@ -166,7 +165,7 @@ python scripts/normalize_data.py car_sales_monthly --output data/processed/car_s
 
 ## 주요 파일
 
-- `app.py`: Streamlit 화면과 4개 탭
+- `app.py`: Streamlit 화면과 3개 탭
 - `app/db.py`: MySQL 연결
 - `app/analytics.py`: 유가-자동차, 유가-대중교통 분석용 데이터 가공
 - `app/sources.py`: Opinet API와 공개 검색 수집
