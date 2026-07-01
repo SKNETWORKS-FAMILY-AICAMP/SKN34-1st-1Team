@@ -1,7 +1,7 @@
 import os
 import xml.etree.ElementTree as ET
 from datetime import datetime
-
+import re
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
@@ -83,33 +83,126 @@ def fetch_opinet_avg_all_price(api_key: str) -> pd.DataFrame:
         )
     return pd.DataFrame(rows)
 
+def clean_title(title: str) -> str:
+    title = re.sub(r"\d{4}\.\d{1,2}\.\d{1,2}\.?", "", title)
+    title = re.sub(r"\([^)]*\)", "", title)
+    title = re.sub(r"\[[^\]]*\]", "", title)
+    title = " ".join(title.split())
+    return title
+
+
+def calculate_relevance(title: str) -> int:
+    score = 0
+
+    weights = {
+        "연비": 5,
+        "유지비": 5,
+        "기름값": 5,
+        "주유비": 5,
+        "전비": 4,
+        "충전비": 4,
+        "후기": 3,
+        "주행": 2,
+        "운행": 2,
+        "절약": 2,
+        "하이브리드": 2,
+        "전기차": 2,
+    }
+
+    for word, weight in weights.items():
+        if word in title:
+            score += weight
+
+    return score
 
 def search_community_posts(keyword: str, limit: int = 20) -> pd.DataFrame:
-    """Search public web results. Keep this lightweight and store only title/snippet/url."""
-    query = f"{keyword} 기름값 연비 자동차 커뮤니티"
-    url = "https://duckduckgo.com/html/"
-    response = requests.get(url, params={"q": query}, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-    response.raise_for_status()
-    soup = BeautifulSoup(response.text, "html.parser")
+    search_suffixes = [
+        "연비",
+        "유지비",
+        "기름값 절약",
+        "주유비 절약",
+    ]
+
+    target_sites = {
+        "보배드림": "bobaedream.co.kr",
+        "클리앙": "clien.net",
+        "뽐뿌": "ppomppu.co.kr",
+    }
+
+    exclude_words = [
+        "이미지", "지식iN", "동영상", "쇼핑", "뉴스", "어학사전",
+        "지도", "인플루언서", "관련도순", "최신순", "전체",
+        "1시간", "1일", "1주", "1개월", "3개월", "6개월", "1년",
+        "옵션 초기화", "블로그", "카페"
+    ]
+
+    url = "https://search.naver.com/search.naver"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
 
     rows = []
-    for result in soup.select(".result")[:limit]:
-        link = result.select_one(".result__a")
-        snippet = result.select_one(".result__snippet")
-        if not link:
-            continue
-        rows.append(
-            {
-                "source": "DuckDuckGo",
-                "title": link.get_text(" ", strip=True),
-                "url": link.get("href"),
-                "snippet": snippet.get_text(" ", strip=True) if snippet else "",
-                "keyword": keyword,
-                "crawled_at": datetime.now(),
-            }
-        )
-    return pd.DataFrame(rows)
 
+    for site_name, domain in target_sites.items():
+        for suffix in search_suffixes:
+            query = f"{keyword} {suffix} site:{domain}"
+
+            response = requests.get(
+                url,
+                params={"where": "web", "query": query},
+                headers=headers,
+                timeout=15,
+            )
+
+            if response.status_code != 200:
+                continue
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            links = soup.select("a")
+
+            for link in links:
+                title = link.get_text(" ", strip=True)
+                href = link.get("href")
+
+                if not title or not href:
+                    continue
+
+                title = clean_title(title)
+
+                if any(word in title for word in exclude_words):
+                    continue
+
+                if keyword not in title and "연비" not in title and "유지비" not in title and "기름값" not in title:
+                    continue
+
+                if domain not in href:
+                    continue
+
+                rows.append(
+                    {
+                        "source": site_name,
+                        "title": title,
+                        "url": href,
+                        "snippet": "",
+                        "keyword": keyword,
+                        "published_at": None,
+                        "crawled_at": datetime.now(),
+                    }
+                )
+
+    df = pd.DataFrame(rows)
+
+    if df.empty:
+        return df
+
+    df["relevance_score"] = df["title"].apply(calculate_relevance)
+
+    df = df.drop_duplicates(subset=["url"])
+    df = df.drop_duplicates(subset=["title"])
+    df = df.sort_values("relevance_score", ascending=False)
+    df = df.head(limit)
+
+    return df.drop(columns=["relevance_score"])
 
 def opinet_api_key() -> str:
     return os.getenv("OPINET_API_KEY", "").strip()
