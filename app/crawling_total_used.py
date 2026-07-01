@@ -46,10 +46,10 @@ def _to_int(text: str) -> int:
     return int(text.replace(",", ""))
 
 def _parse_rate(text: str) -> float | None:
-    match = re.search(r"[▲▼]\s*([\d.]+)", text)
+    match = text.split(" ")[1]
     if not match:
         return None
-    return float(match.group(1))
+    return float(match)
 
 def extract_total_use(soup: BeautifulSoup) -> dict | None:
     container = soup.find("div", id="container")
